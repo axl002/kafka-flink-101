@@ -29,18 +29,20 @@ import java.util.Properties;
 
 public class ReadFromKafka {
 
+  public static Properties props;
 
   public static void main(String[] args) throws Exception {
     // create execution environment
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-    Properties properties = new Properties();
-    properties.setProperty("bootstrap.servers", "localhost:9092");
-    properties.setProperty("group.id", "flink_consumer");
-
+      Properties props = new Properties();
+     // setProperties();
+      props.setProperty("bootstrap.servers", "localhost:9092");
+      props.setProperty("group.id", "zookeeper");
+      String topic = "test";
 
     DataStream<String> stream = env
-            .addSource(new FlinkKafkaConsumer09<>("test", new SimpleStringSchema(), properties));
+            .addSource(new FlinkKafkaConsumer09<>(topic, new SimpleStringSchema(), props));
 
     stream.map(new MapFunction<String, String>() {
       private static final long serialVersionUID = -6867736771747690202L;
@@ -53,6 +55,23 @@ public class ReadFromKafka {
 
     env.execute();
   }
+
+
+//  private static void setProperties(){
+//
+//    //String group = args[1].toString();
+//    props.put("bootstrap.servers", "localhost:9092");
+//    props.put("group.id", "zookeeper"); // need to test if zookeeper is required group, it works but do other groups work?
+//    props.put("enable.auto.commit", "true");
+//    props.put("auto.commit.interval.ms", "1000");
+//    props.put("session.timeout.ms", "30000");
+//    props.put("fetch.message.max.bytes","10000000");
+//    props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+//    props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+//
+//    props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+//    props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+//  }
 
 
 }
