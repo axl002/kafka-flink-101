@@ -171,6 +171,7 @@ public class PipeLine{
                     @Override
                     public Tuple3<String,ObjectNode,Integer> map(String noDupeInput) throws Exception {
                         ObjectNode on = parseJsonMutable(noDupeInput);
+                        System.out.println("bb" );
                         //on.get("name").asText() +
                         String key = on.get("typeLine").asText();
                         return Tuple3.of(key, on, 1);
@@ -209,8 +210,8 @@ public class PipeLine{
                 ObjectNode on = filteredInput.f1;
                 on.put("count", filteredInput.f2);
                 on.put("price", parseValue(on.get("note").asText()));
-                //return on.toString();
-                return "______";
+                return on.toString();
+//                return "______";
             }
         }).addSink(new FlinkKafkaProducer09<String>(topicOut, new SimpleStringSchema(), outProps));
 
@@ -219,15 +220,14 @@ public class PipeLine{
         //parameters are key, objectnode, count, price, price^2
         DataStream<String> avg = stream.select("avg");
 
-
-        avg
-                .filter(new FilterFunction<String>() {
+        avg.filter(new FilterFunction<String>() {
                     @Override
                     public boolean filter(String s) throws Exception {
                         JsonNode jn = parseJson(s);
+                        System.out.println("got here: " + jn.get("note"));
                         try {
-                            System.out.println("got here: " + jn.get("price"));
-                            return jn.get("price").asDouble() >= -3D;
+                            //System.out.println("got here: " + jn.get("price"));
+                            return parseValue(jn.get("note").asText()) >=0;
                         }catch(NullPointerException npe){
                             return false;
                         }
@@ -238,13 +238,14 @@ public class PipeLine{
             @Override
             public Tuple5<String, ObjectNode, Integer, Double, Double> map(String raw) throws Exception {
                 ObjectNode on = parseJsonMutable(raw);
-
+                on.put("price", parseValue(on.get("note").asText()));
                 return Tuple5.of(on.get("name").asText() + on.get("typeLine").asText(), on,
                         1, on.get("price").asDouble(), on.get("price").asDouble()*on.get("price").asDouble());
             }
         })
                 .keyBy(0)
-                .window(TumblingEventTimeWindows.of(Time.seconds(20))).trigger(new Trigger<Tuple5<String, ObjectNode, Integer, Double, Double>, TimeWindow>() {
+                .window(TumblingEventTimeWindows.of(Time.hours(6)))
+                .trigger(new Trigger<Tuple5<String, ObjectNode, Integer, Double, Double>, TimeWindow>() {
             @Override
             public TriggerResult onElement(Tuple5<String, ObjectNode, Integer, Double, Double> stringObjectNodeIntegerDoubleDoubleTuple5, long l, TimeWindow timeWindow, TriggerContext triggerContext) throws Exception {
                 return TriggerResult.FIRE;
@@ -285,41 +286,14 @@ public class PipeLine{
             @Override
             public String map(Tuple5<String, ObjectNode, Integer, Double,Double> finalOutput) throws Exception {
 
-//                return finalOutput.f0
-//                        + Double.toString(finalOutput.f3/finalOutput.f2)
-//                        + Double.toString(getSTD(finalOutput.f2, finalOutput.f3, finalOutput.f4));
-                return "foo";
+                return "name: " + finalOutput.f0
+                        + ", avgPrice: "+ Double.toString(finalOutput.f3/finalOutput.f2)
+                        + ", STD: " + Double.toString(getSTD(finalOutput.f2, finalOutput.f3, finalOutput.f4));
+
             }
         }).addSink(new FlinkKafkaProducer09<String>(meanOut, new SimpleStringSchema(), outProps));
 
         env.execute();
-    }
-
-
-    private static class evTrigger extends Trigger<Tuple5<String, ObjectNode, Integer, Double, Double>, TimeWindow> {
-
-
-        @Override
-        public TriggerResult onElement(Tuple5<String, ObjectNode, Integer, Double, Double> input,
-                                       long l, TimeWindow window, TriggerContext triggerContext) throws Exception {
-//            if(window.getEnd()<= triggerContext.getCurrentWatermark()){
-//                return TriggerResult.FIRE;
-//            }else {
-//                triggerContext.registerEventTimeTimer(window.maxTimestamp());
-//                return TriggerResult.CONTINUE;
-//            }
-            return TriggerResult.FIRE;
-        }
-
-        @Override
-        public TriggerResult onProcessingTime(long l, TimeWindow timeWindow, TriggerContext triggerContext) throws Exception {
-            return TriggerResult.CONTINUE;
-        }
-
-        @Override
-        public TriggerResult onEventTime(long l, TimeWindow timeWindow, TriggerContext triggerContext) throws Exception {
-                return TriggerResult.CONTINUE;
-        }
     }
 
     private static class MyTimeStamp implements AssignerWithPeriodicWatermarks {
@@ -333,33 +307,6 @@ public class PipeLine{
         @Override
         public long extractTimestamp(Object o, long l) {
             return System.currentTimeMillis();
-        }
-    }
-
-    private static class FoldInWindow implements FoldFunction<Tuple5<String, Long, Integer, Double, Double>,
-            Tuple5<String, Long, Integer, Double, Double>> {
-        @Override
-        public Tuple5<String, Long, Integer, Double, Double>
-        fold(Tuple5<String, Long, Integer, Double, Double> old,
-             Tuple5<String, Long, Integer, Double, Double> current) throws Exception {
-            return Tuple5.of(current.f0,current.f1,current.f2+old.f2,
-                    old.f3+current.f3, old.f4+current.f4);
-        }
-    }
-
-    private static class AggInWindow
-            implements WindowFunction<Tuple5<String, Long, Integer, Double, Double>,
-                        Tuple5<String, Long, Integer, Double, Double>,String, TimeWindow> {
-
-        @Override
-        public void apply(String key,
-                          TimeWindow window,
-                          Iterable<Tuple5<String, Long, Integer, Double, Double>> aggs,
-                          Collector<Tuple5<String, Long, Integer, Double, Double>> collector) throws Exception {
-            Integer count = aggs.iterator().next().getField(3);
-            Double sums = aggs.iterator().next().getField(4);
-            Double ss = aggs.iterator().next().getField(5);
-            collector.collect(new Tuple5<String, Long, Integer, Double, Double>(key, window.getEnd(), count, sums, ss));
         }
     }
 
@@ -422,3 +369,32 @@ public class PipeLine{
     }
 
 }
+
+
+
+//private static class FoldInWindow implements FoldFunction<Tuple5<String, Long, Integer, Double, Double>,
+//        Tuple5<String, Long, Integer, Double, Double>> {
+//    @Override
+//    public Tuple5<String, Long, Integer, Double, Double>
+//    fold(Tuple5<String, Long, Integer, Double, Double> old,
+//         Tuple5<String, Long, Integer, Double, Double> current) throws Exception {
+//        return Tuple5.of(current.f0,current.f1,current.f2+old.f2,
+//                old.f3+current.f3, old.f4+current.f4);
+//    }
+//}
+//
+//private static class AggInWindow
+//        implements WindowFunction<Tuple5<String, Long, Integer, Double, Double>,
+//        Tuple5<String, Long, Integer, Double, Double>,String, TimeWindow> {
+//
+//    @Override
+//    public void apply(String key,
+//                      TimeWindow window,
+//                      Iterable<Tuple5<String, Long, Integer, Double, Double>> aggs,
+//                      Collector<Tuple5<String, Long, Integer, Double, Double>> collector) throws Exception {
+//        Integer count = aggs.iterator().next().getField(3);
+//        Double sums = aggs.iterator().next().getField(4);
+//        Double ss = aggs.iterator().next().getField(5);
+//        collector.collect(new Tuple5<String, Long, Integer, Double, Double>(key, window.getEnd(), count, sums, ss));
+//    }
+//}
