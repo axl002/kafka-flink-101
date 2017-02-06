@@ -17,18 +17,18 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SplitStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.AssignerWithPeriodicWatermarks;
-import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
+
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.triggers.Trigger;
 import org.apache.flink.streaming.api.windowing.triggers.TriggerResult;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
-import org.apache.flink.streaming.api.windowing.windows.Window;
+
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer09;
 import org.apache.flink.streaming.util.serialization.SimpleStringSchema;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer09;
-import org.apache.flink.util.Collector;
+
 
 
 import javax.annotation.Nullable;
@@ -278,9 +278,6 @@ public class PipeLine{
                                 old.f3+current.f3, old.f4+current.f4);
                     }
                 })
-//                .fold(new Tuple5<>("0", 0L, 0, 0D, 0D),
-//                        new FoldInWindow(),
-//                        new AggInWindow())
                 // return simple output of name+typeLine, mean, STD
         .map(new MapFunction<Tuple5<String,ObjectNode,Integer,Double,Double>, String>() {
             @Override
@@ -297,13 +294,11 @@ public class PipeLine{
     }
 
     private static class MyTimeStamp implements AssignerWithPeriodicWatermarks {
-
         @Nullable
         @Override
         public Watermark getCurrentWatermark() {
             return new Watermark(System.currentTimeMillis());
         }
-
         @Override
         public long extractTimestamp(Object o, long l) {
             return System.currentTimeMillis();
