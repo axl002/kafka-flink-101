@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 
+import com.fasterxml.jackson.databind.deser.DataFormatReaders;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.FoldFunction;
@@ -36,6 +37,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 // current function 02-01-2017
 // filters out duplicates
@@ -45,7 +48,6 @@ import java.util.Properties;
 
 // computer windowed average price in last 6 hours
 public class PipeLine{
-
 
     public static Properties props;
 
@@ -220,7 +222,7 @@ public class PipeLine{
 
 
         //part 3 compute windowed average in last 6 hours
-        //parameters are key, objectnode, count, price, price^2
+        //parameters are (key) name, objectnode, count, price, price^2
         DataStream<String> avg = stream.select("avg");
 
         avg.filter(new FilterFunction<String>() {
@@ -242,7 +244,7 @@ public class PipeLine{
             public Tuple5<String, ObjectNode, Integer, Double, Double> map(String raw) throws Exception {
                 ObjectNode on = parseJsonMutable(raw);
                 on.put("price", parseValue(on.get("note").asText()));
-                return Tuple5.of(on.get("name").asText() + on.get("typeLine").asText(), on,
+                return Tuple5.of(makeNamePretty(on), on,
                         1, on.get("price").asDouble(), on.get("price").asDouble()*on.get("price").asDouble());
             }
         })
@@ -296,6 +298,8 @@ public class PipeLine{
         env.execute();
     }
 
+
+    // generate timestamp and watermark to allow for windowed stream
     private static class MyTimeStamp implements AssignerWithPeriodicWatermarks {
         @Nullable
         @Override
@@ -309,6 +313,7 @@ public class PipeLine{
     }
 
 
+    // turn raw json string into json object
     // for editing json operations
     private static ObjectNode parseJsonMutable(String raw) throws IOException{
         ObjectMapper mapper = new ObjectMapper();
@@ -335,6 +340,7 @@ public class PipeLine{
 
     }
 
+    // remove tags from item name
     private static String makeNamePretty(ObjectNode on){
         String rawName = on.get("name").asText()+" "+on.get("typeLine").asText();
         String[] splitName = rawName.split("<<set:.+>><<set:.+>><<set:.+>>(.*?)");
@@ -345,6 +351,8 @@ public class PipeLine{
         }
     }
 
+
+    // generate a private message to send to player to request purchase of item
     private static String createPM(ObjectNode on){
         String target = "@" + on.get("accountName").asText();
         String theName = on.get("cleanName").asText();
@@ -360,28 +368,40 @@ public class PipeLine{
                 +"left "+ xpos+", "
                 +"top "+ypos+")";
 
-
                 //" Hi, I would like to buy your Reach of the Council Spine Bow listed for 120 chaos in Breach (stash tab \"трейд\"; position: left 11, top 8)"
     }
+
+    // convert the note to a numeric price value relative to chaos orbs
+    // items that cannot be converted are given negative value
     private static double parseValue(String note){
         String dankNote = note.toLowerCase();
         // check if buyout
         try {
             if(dankNote.contains("~b/o".toLowerCase())){
+                Pattern pattern = Pattern.compile("[0-9]+.*,*[0-9]*\\s");
+                Matcher matcher = pattern.matcher(note);
+                Double price = 0D;
+                try {
+                    matcher.find();
+                    price = Double.parseDouble(matcher.group(0));
+                } catch (Exception noRegEx){
+                    price = -3D;
+                }
+
                 if (dankNote.contains("chaos")){
-                    return Double.parseDouble(dankNote.replaceAll("[^0-9]+", ""));
+                    return price;
                 }
                 else if (dankNote.contains("exa")){
-                    return Double.parseDouble(dankNote.replaceAll("[^0-9]+", ""))*83;
+                    return price*83;
                 }
                 else if (dankNote.contains("jeweller")){
-                    return Double.parseDouble(dankNote.replaceAll("[^0-9]+", ""))/12;
+                    return price/12;
                 }
                 else if (dankNote.contains("fusing")){
-                    return Double.parseDouble(dankNote.replaceAll("[^0-9]+", ""))/2.9;
+                    return price/2.9;
                 }
                 else if (dankNote.contains("alchemy")){
-                    return Double.parseDouble(dankNote.replaceAll("[^0-9]+", ""))/2.5;
+                    return price/2.5;
                 }
                 else {
                     return -1;
