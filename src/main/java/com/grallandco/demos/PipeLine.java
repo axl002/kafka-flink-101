@@ -208,8 +208,11 @@ public class PipeLine{
             @Override
             public String map(Tuple3<String, ObjectNode, Integer> filteredInput) throws Exception {
                 ObjectNode on = filteredInput.f1;
+                String cleanName = makeNamePretty(on);
+                on.put("cleanName", cleanName);
                 on.put("count", filteredInput.f2);
                 on.put("price", parseValue(on.get("note").asText()));
+                on.put("privateMessage", createPM(on));
                 return on.toString();
 //                return "______";
             }
@@ -330,6 +333,35 @@ public class PipeLine{
     private static double getSTD(Integer count, Double sum, Double ss){
         return Math.sqrt(ss/count- (sum*sum)/count/count);
 
+    }
+
+    private static String makeNamePretty(ObjectNode on){
+        String rawName = on.get("name").asText()+" "+on.get("typeLine").asText();
+        String[] splitName = rawName.split("<<set:.+>><<set:.+>><<set:.+>>(.*?)");
+        if(splitName.length >1){
+            return splitName[1];
+        }else{
+            return rawName;
+        }
+    }
+
+    private static String createPM(ObjectNode on){
+        String target = "@" + on.get("accountName").asText();
+        String theName = on.get("cleanName").asText();
+        String xpos = on.get("x").asText();
+        String ypos = on.get("y").asText();
+        String note = on.get("note").asText();
+        String stashName = on.get("stashName").asText();
+        String league = on.get("league").asText();
+        return target +" Hi, I would like to buy your "
+                +theName +" listed for "
+                +note+" in " + league+ " (stash tab "
+                +stashName+"; position: "
+                +"left "+ xpos+", "
+                +"top "+ypos+")";
+
+
+                //" Hi, I would like to buy your Reach of the Council Spine Bow listed for 120 chaos in Breach (stash tab \"трейд\"; position: left 11, top 8)"
     }
     private static double parseValue(String note){
         String dankNote = note.toLowerCase();
