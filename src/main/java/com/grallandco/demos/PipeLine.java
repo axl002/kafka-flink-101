@@ -229,7 +229,7 @@ public class PipeLine{
                     @Override
                     public boolean filter(String s) throws Exception {
                         JsonNode jn = parseJson(s);
-                        System.out.println("got here: " + jn.get("note"));
+                        //System.out.println("got here: " + jn.get("note"));
                         try {
                             //System.out.println("got here: " + jn.get("price"));
                             return parseValue(jn.get("note").asText()) >=0;
@@ -288,12 +288,14 @@ public class PipeLine{
             @Override
             public String map(Tuple5<String, ObjectNode, Integer, Double,Double> finalOutput) throws Exception {
 
-                return "\"name\": " + "\""+finalOutput.f0+ "\""
+                String finalString = "\"name\": " + "\""+finalOutput.f0+ "\""
                         + ", \"avgPrice\": "+ Double.toString(finalOutput.f3/finalOutput.f2)
                         + ", \"STD\": " + Double.toString(getSTD(finalOutput.f2, finalOutput.f3, finalOutput.f4))
                         + ", \"threshold\": " + Double.toString(finalOutput.f3/finalOutput.f2
                         - 2*(getSTD(finalOutput.f2, finalOutput.f3, finalOutput.f4)));
 
+                JsonNode finalJN = parseJson(finalString);
+                return finalJN.toString();
             }
         }).addSink(new FlinkKafkaProducer09<String>(meanOut, new SimpleStringSchema(), outProps));
 
