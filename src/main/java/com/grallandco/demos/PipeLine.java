@@ -77,8 +77,14 @@ public class PipeLine{
                     @Override
                     public Tuple3<String, ObjectNode, Integer> map(String input) throws Exception {
                         ObjectNode on = parseJsonMutable(input);
-                        String key = on.get("accountName").asText() +
-                                on.get("id").asText();
+                        String key;
+                        try {
+                            key = on.get("accountName").asText() +
+                                    on.get("id").asText() + on.get("note").asText();
+                        }catch(NullPointerException npe){
+                            key = on.get("accountName").asText() +
+                                    on.get("id").asText();
+                        }
                         return Tuple3.of(key, on, 1);
                     }
                 })
@@ -244,6 +250,7 @@ public class PipeLine{
             public Tuple5<String, ObjectNode, Integer, Double, Double> map(String raw) throws Exception {
                 ObjectNode on = parseJsonMutable(raw);
                 on.put("price", parseValue(on.get("note").asText()));
+                on.put("cleanName", makeNamePretty(on));
                 return Tuple5.of(makeNamePretty(on), on,
                         1, on.get("price").asDouble(), on.get("price").asDouble()*on.get("price").asDouble());
             }
@@ -288,14 +295,20 @@ public class PipeLine{
             @Override
             public String map(Tuple5<String, ObjectNode, Integer, Double,Double> finalOutput) throws Exception {
 
-                String finalString = "\"name\": " + "\""+finalOutput.f0+ "\""
-                        + ", \"avgPrice\": "+ Double.toString(finalOutput.f3/finalOutput.f2)
-                        + ", \"STD\": " + Double.toString(getSTD(finalOutput.f2, finalOutput.f3, finalOutput.f4))
-                        + ", \"threshold\": " + Double.toString(finalOutput.f3/finalOutput.f2
-                        - 2*(getSTD(finalOutput.f2, finalOutput.f3, finalOutput.f4)));
-
-                JsonNode finalJN = parseJson(finalString);
-                return finalJN.toString();
+//                String finalString = "\"name\": " + "\""+finalOutput.f0+ "\""
+//                        + ", \"avgPrice\": "+ Double.toString(finalOutput.f3/finalOutput.f2)
+//                        + ", \"STD\": " + Double.toString(getSTD(finalOutput.f2, finalOutput.f3, finalOutput.f4))
+//                        + ", \"threshold\": " + Double.toString(finalOutput.f3/finalOutput.f2
+//                        - 2*(getSTD(finalOutput.f2, finalOutput.f3, finalOutput.f4)));
+                Double avgPrice = finalOutput.f3/finalOutput.f2;
+                Double STD = getSTD(finalOutput.f2, finalOutput.f3, finalOutput.f4);
+                Double threshold = finalOutput.f3/finalOutput.f2
+                                - 2*(getSTD(finalOutput.f2, finalOutput.f3, finalOutput.f4));
+                finalOutput.f1.put("avgPrice", avgPrice);
+                finalOutput.f1.put("STD", STD);
+                finalOutput.f1.put("threshold", threshold);
+                //ObjectNode finalJN = parseJsonMutable(finalString);
+                return finalOutput.f1.toString();
             }
         }).addSink(new FlinkKafkaProducer09<String>(meanOut, new SimpleStringSchema(), outProps));
 
